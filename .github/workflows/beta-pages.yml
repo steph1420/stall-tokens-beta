@@ -1,0 +1,63 @@
+# Publish the Beta channel of Stall Tokens (Q-CHANNEL A, Q-BETA-PATH B).
+# Builds the PUBLIC source repo steph1420/stall-tokens at branch feat/v2.1.0. This repo holds no app code and no secrets.
+# Stable (steph1420/stall-tokens, /stall-tokens/) is never touched from here.
+name: Beta Pages
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Source branch or commit in steph1420/stall-tokens
+        default: feat/v2.1.0
+  schedule:
+    - cron: '30 0 * * *' # 06:00 IST daily
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: steph1420/stall-tokens
+          ref: ${{ inputs.ref || 'feat/v2.1.0' }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: CI gate
+        run: npm run check
+        env:
+          VITE_CHANNEL: beta
+          VITE_GIT_SHA: beta-${{ github.sha }}
+      # Until P0 lands in the app (channel from base path), the Beta label and its own storage
+      # are set here on the built files, so Beta never reads Stable's data or sync settings.
+      - name: Label Beta + own storage
+        run: |
+          set -euo pipefail
+          n=$(grep -rl "stall-tokens.v2" dist | wc -l)
+          test "$n" -gt 0 || { echo "storage prefix not found in dist"; exit 1; }
+          grep -rl "stall-tokens.v2" dist | xargs sed -i 's/stall-tokens\.v2/stall-tokens-beta.v2/g'
+          sed -i 's#<title>\([^<]*\)</title>#<title>\1 (Beta)</title>#' dist/index.html
+          for f in dist/manifest.webmanifest; do [ -f "$f" ] && sed -i 's/"name":"Stall Tokens"/"name":"Stall Tokens Beta"/; s/"short_name":"Stall"/"short_name":"Stall β"/' "$f"; done
+          ! grep -rq "stall-tokens\.v2" dist
+          grep -o "<title>[^<]*</title>" dist/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
