@@ -31,12 +31,13 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - name: Source commit for the footer stamp
+        run: echo "VITE_GIT_SHA=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_ENV"
       - run: npm ci
       - name: CI gate
         run: npm run check
         env:
           VITE_CHANNEL: beta
-          VITE_GIT_SHA: beta-${{ github.sha }}
       # Since 2.1.0 P0 (F-49) the app sets its own channel, so this step only checks the build and changes nothing:
       # Beta title + manifest name, and the Beta storage prefix present in the JS (Beta never reads Stable's data).
       - name: Check Beta label + own storage
