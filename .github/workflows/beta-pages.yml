@@ -37,17 +37,15 @@ jobs:
         env:
           VITE_CHANNEL: beta
           VITE_GIT_SHA: beta-${{ github.sha }}
-      # Until P0 lands in the app (channel from base path), the Beta label and its own storage
-      # are set here on the built files, so Beta never reads Stable's data or sync settings.
-      - name: Label Beta + own storage
+      # Since 2.1.0 P0 (F-49) the app sets its own channel, so this step only checks the build and changes nothing:
+      # Beta title + manifest name, and the Beta storage prefix present in the JS (Beta never reads Stable's data).
+      - name: Check Beta label + own storage
         run: |
           set -euo pipefail
-          n=$(grep -rl "stall-tokens.v2" dist | wc -l)
-          test "$n" -gt 0 || { echo "storage prefix not found in dist"; exit 1; }
-          grep -rl "stall-tokens.v2" dist | xargs sed -i 's/stall-tokens\.v2/stall-tokens-beta.v2/g'
-          sed -i 's#<title>\([^<]*\)</title>#<title>\1 (Beta)</title>#' dist/index.html
-          for f in dist/manifest.webmanifest; do [ -f "$f" ] && sed -i 's/"name":"Stall Tokens"/"name":"Stall Tokens Beta"/; s/"short_name":"Stall"/"short_name":"Stall β"/' "$f"; done
-          ! grep -rq "stall-tokens\.v2" dist
+          grep -q "<title>Stall Tokens Beta</title>" dist/index.html || { echo "title is not Beta"; exit 1; }
+          grep -q '"name":"Stall Tokens Beta"' dist/manifest.webmanifest || { echo "manifest name is not Beta"; exit 1; }
+          grep -rlq "stall-tokens-beta.v2" dist/assets || { echo "Beta storage prefix not in the build"; exit 1; }
+          grep -rq 'VITE_CHANNEL:"beta"' dist/assets || { echo "build is not VITE_CHANNEL=beta"; exit 1; }
           grep -o "<title>[^<]*</title>" dist/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
